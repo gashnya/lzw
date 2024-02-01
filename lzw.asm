@@ -267,7 +267,7 @@ lzw_decode:
     movzx eax, WORD [table + ecx + 4]
 
     cmp eax, edx
-    jae .end_with_err
+    ja .end_with_err
 
     mov [out_ptr_bp], edi
 
@@ -321,7 +321,7 @@ lzw_decode:
     inc eax
 
     cmp eax, edx
-    jae .end_with_err
+    ja .end_with_err
 
     mov [out_ptr_bp], edi
 

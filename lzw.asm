@@ -5,7 +5,7 @@ global lzw_decode
 %define EOI_CODE        257
 %define TABLE_START     258
 %define TABLE_SIZE      4096
-%define STACK_SIZE      24608
+%define STACK_SIZE      24864
 %define START_CODE_SIZE 9
 
 %macro get_next_code 1
@@ -83,6 +83,7 @@ global lzw_decode
 
     inc DWORD [code_cnt]
     mov ebx, [code_cnt]
+    add ebx, 2
     mov cl, ch
     shr ebx, cl
     cmp ebx, 1
@@ -148,8 +149,9 @@ lzw_decode:
     %define out_ptr     esp + STACK_SIZE + 16 + 12
     %define out_size    esp + STACK_SIZE + 16 + 16
 
-    %define table_ptr           esp + 8224 ; + 16384 bytes (4096 * 4)
-    %define table_len           esp + 32   ; +  8192 bytes (4096 * 2)
+    %define table_char      esp + 24608 ; +   256 bytes
+    %define table_ptr       esp + 8224  ; + 16384 bytes (4096 * 4)
+    %define table_len       esp + 32    ; +  8192 bytes (4096 * 2)
     %define code_cnt        esp + 28 ; DWORD
     %define out_ptr_bp      esp + 24 ; DWORD
     %define out_ptr_bp_gl   esp + 20 ; DWORD
@@ -183,12 +185,15 @@ lzw_decode:
     mov edx, 255 ; 255 * 8 + 4
 .prepare_loop:
     mov WORD [table_len + edx * 2], 1
+    mov BYTE [table_char + edx], dl
+    lea ebx, [table_char + edx]
+    mov DWORD [table_ptr + edx * 4], ebx
     dec edx
     jns .prepare_loop
 
     mov BYTE [code_size], START_CODE_SIZE
     mov BYTE [offset], 0
-    mov DWORD [code_cnt], TABLE_START
+    mov DWORD [code_cnt], CLEAR_CODE
 
     mov [out_ptr_bp_gl], edi
 
@@ -205,7 +210,7 @@ lzw_decode:
     jne .not_clear
 ;-------------------------------------
     mov BYTE [code_size], START_CODE_SIZE
-    mov DWORD [code_cnt], TABLE_START
+    mov DWORD [code_cnt], CLEAR_CODE
 
     get_next_code 2
 
@@ -228,7 +233,6 @@ lzw_decode:
     jmp .lzw_loop
 .not_clear:
     mov ecx, [code_cnt]
-    sub ecx, 2
 
     cmp eax, TABLE_SIZE
     jae .end_with_err
@@ -238,21 +242,6 @@ lzw_decode:
 
     mov ecx, eax
 
-    cmp eax, TABLE_START
-    jae .not_in_table_prefix
-;-------------------------------------
-    mov [out_ptr_bp], edi
-
-    mov edx, [out_size]
-    sub edx, edi
-    cmp edx, 1
-    jb .end_with_err
-
-    mov [edi], al
-    inc edi
-
-    jmp .out_write_1
-.not_in_table_prefix:
     mov edx, [out_size]
     sub edx, edi
     movzx eax, WORD [table_len + ecx * 2]
@@ -266,7 +255,6 @@ lzw_decode:
 
 .out_write_1:
     mov ebx, [code_cnt]
-    sub ebx, 2
 
     movzx eax, WORD [old_code]
 
@@ -288,7 +276,6 @@ lzw_decode:
 .not_in_table:
     movzx ebx, WORD [old_code]
     mov ecx, [code_cnt]
-    sub ecx, 2
     cmp ebx, ecx
     jae .end_with_err
 
@@ -315,7 +302,6 @@ lzw_decode:
     inc edi
 
     mov ebx, [code_cnt]
-    sub ebx, 2
 
     mov dx, [table_len + ecx * 2]
     mov ebp, [out_ptr_bp]
@@ -333,16 +319,13 @@ lzw_decode:
 ;-------------------------------------
 .end_with_err:
     mov eax, -1
-    add esp, STACK_SIZE
-    pop ebp
-    pop edi
-    pop esi
-    pop ebx
-    ret
+    jmp .end_clear
+
 .end:
     sub edi, [out_ptr_bp_gl]
     mov eax, edi
 
+.end_clear:
     add esp, STACK_SIZE
     pop ebp
     pop edi
